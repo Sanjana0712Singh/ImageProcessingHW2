@@ -1,0 +1,371 @@
+#include "utility.h"
+
+#define MAXRGB 255
+#define MINRGB 0
+#define PI 3.14159265358979323846
+
+std::string utility::intToString(int number)
+{
+   std::stringstream ss;//create a stringstream
+   ss << number;//add number to the stream
+   return ss.str();//return a string with the contents of the stream
+}
+
+int utility::checkValue(int value)
+{
+	if (value > MAXRGB)
+		return MAXRGB;
+	if (value < MINRGB)
+		return MINRGB;
+	return value;
+}
+
+/*-----------------------------------------------------------------------**/
+void utility::addGrey(image &src, image &tgt, int value)
+{
+	tgt.resize(src.getNumberOfRows(), src.getNumberOfColumns());
+	for (int i=0; i<src.getNumberOfRows(); i++)
+		for (int j=0; j<src.getNumberOfColumns(); j++)
+		{
+			tgt.setPixel(i,j,checkValue(src.getPixel(i,j)+value)); 
+		}
+}
+
+/*-----------------------------------------------------------------------**/
+void utility::binarize(image &src, image &tgt, int threshold)
+{
+	tgt.resize(src.getNumberOfRows(), src.getNumberOfColumns());
+	for (int i=0; i<src.getNumberOfRows(); i++)
+	{
+		for (int j=0; j<src.getNumberOfColumns(); j++)
+		{
+			if (src.getPixel(i,j) < threshold)
+				tgt.setPixel(i,j,MINRGB);
+			else
+				tgt.setPixel(i,j,MAXRGB);
+		}
+	}
+}
+
+/*-----------------------------------------------------------------------**/
+void utility::scale(image &src, image &tgt, float ratio)
+{
+	int rows = (int)((float)src.getNumberOfRows() * ratio);
+	int cols  = (int)((float)src.getNumberOfColumns() * ratio);
+	tgt.resize(rows, cols);
+	for (int i=0; i<rows; i++)
+	{
+		for (int j=0; j<cols; j++)
+		{	
+			/* Map the pixel of new image back to original image */
+			int i2 = (int)floor((float)i/ratio);
+			int j2 = (int)floor((float)j/ratio);
+			if (ratio == 2) {
+				/* Directly copy the value */
+				tgt.setPixel(i,j,checkValue(src.getPixel(i2,j2)));
+			}
+
+			if (ratio == 0.5) {
+				/* Average the values of four pixels */
+				int value = src.getPixel(i2,j2) + src.getPixel(i2,j2+1) + src.getPixel(i2+1,j2) + src.getPixel(i2+1,j2+1);
+				tgt.setPixel(i,j,checkValue(value/4));
+			}
+		}
+	}
+}
+
+/*-----------------------------------------------------------------------**/
+void utility::decreaseBrightness(image &src, image &tgt, int threshold, int value)
+{
+    tgt.resize(src.getNumberOfRows(), src.getNumberOfColumns());
+    for (int i = 0; i < src.getNumberOfRows(); i++)
+    {
+        for (int j = 0; j < src.getNumberOfColumns(); j++)
+        {
+            int curPix = src.getPixel(i, j);
+            if (curPix < threshold)
+                tgt.setPixel(i, j, checkValue(curPix - value));
+            else
+                tgt.setPixel(i, j, curPix);
+        }
+    }
+}
+
+/*----------------- HW1: Add Intensity in ROI -----------------*/
+void utility::addGreyROI(image &src, image &tgt, int x, int y, int s, int value)
+{
+    for (int i = x; i < x + s; i++)
+    {
+        for (int j = y; j < y + s; j++)
+        {
+            tgt.setPixel(i, j, checkValue(src.getPixel(i, j) + value)); 
+        }
+    }
+}
+
+/*----------------- HW1: Binarize in ROI -----------------*/
+void utility::binarizeROI(image &src, image &tgt, int x, int y, int s, int threshold)
+{
+    for (int i = x; i < x + s; i++)
+    {
+        for (int j = y; j < y + s; j++)
+        {
+            if (src.getPixel(i, j) < threshold)
+                tgt.setPixel(i, j, MINRGB);
+            else
+                tgt.setPixel(i, j, MAXRGB);
+        }
+    }
+}
+
+/*----------------- HW1: Decrease Brightness in ROI -----------------*/
+void utility::decreaseBrightnessROI(image &src, image &tgt, int x, int y, int s, int threshold, int value)
+{
+    for (int i = x; i < x + s; i++)
+    {
+        for (int j = y; j < y + s; j++)
+        {
+            int curPix = src.getPixel(i, j);
+            if (curPix < threshold)
+                tgt.setPixel(i, j, checkValue(curPix - value));
+            else
+                tgt.setPixel(i, j, curPix);
+        }
+    }
+}
+
+/*----------------- HW1: Brightness then Rotate ROI -----------------*/
+void utility::brightnessRotateROI(image &src, image &tgt, int x, int y, int s, int br, int angle)
+{
+    for (int i = 0; i < s; i++)
+    {
+        for (int j = 0; j < s; j++)
+        {
+            int modifiedVal = checkValue(src.getPixel(x + i, y + j) + br);
+            
+            if (angle == 90)
+                tgt.setPixel(x + j, y + (s - 1 - i), modifiedVal);
+            else if (angle == 180)
+                tgt.setPixel(x + (s - 1 - i), y + (s - 1 - j), modifiedVal);
+            else if (angle == 270)
+                tgt.setPixel(x + (s - 1 - j), y + i, modifiedVal);
+        }
+    }
+}
+
+/*----------------- HW1: Scale then Rotate ROI -----------------*/
+void utility::scaleRotateROI(image &src, image &tgt, int x, int y, int s, float ratio, int angle)
+{
+    for (int i = 0; i < s; i++)
+    {
+        for (int j = 0; j < s; j++)
+        {
+            int i_rot, j_rot;
+            if (angle == 90) {
+                i_rot = s - 1 - j;
+                j_rot = i;
+            } else if (angle == 180) {
+                i_rot = s - 1 - i;
+                j_rot = s - 1 - j;
+            } else if (angle == 270) {
+                i_rot = j;
+                j_rot = s - 1 - i;
+            } else {
+                i_rot = i;
+                j_rot = j;
+            }
+
+            int i_src = (int)floor((float)i_rot / ratio);
+            int j_src = (int)floor((float)j_rot / ratio);
+
+            if (i_src >= 0 && i_src < s && j_src >= 0 && j_src < s) {
+                tgt.setPixel(x + i, y + j, src.getPixel(x + i_src, y + j_src));
+            }
+        }
+    }
+}
+
+/*----------------- HW1: Rotate ROI -----------------*/
+void utility::rotateROI(image &src, image &tgt, int x, int y, int s, int angle)
+{
+    for (int i = 0; i < s; i++)
+    {
+        for (int j = 0; j < s; j++)
+        {
+            int srcI, srcJ;
+            if (angle == 90) {
+                srcI = s - 1 - j;
+                srcJ = i;
+            } else if (angle == 180) {
+                srcI = s - 1 - i;
+                srcJ = s - 1 - j;
+            } else if (angle == 270) {
+                srcI = j;
+                srcJ = s - 1 - i;
+            } else {
+                srcI = i;
+                srcJ = j;
+            }
+            
+            int srcVal = src.getPixel(x + srcI, y + srcJ);
+            tgt.setPixel(x + i, y + j, srcVal);
+        }
+    }
+}
+
+/*----------------- HW1: Color ROI Augmentation - ULTRA SAFE VERSION -----------------*/
+void utility::colorModifyROI(image &src, image &tgt, int x, int y, int s, float moreC, int ac, int angle)
+{
+    // Validate inputs
+    if (x < 0 || y < 0 || s <= 0) return;
+    if (x + s > src.getNumberOfRows() || y + s > src.getNumberOfColumns()) return;
+    
+    // Handle simple 0 degree case (no rotation)
+    if (angle == 0)
+    {
+        for (int i = 0; i < s; i++)
+        {
+            for (int j = 0; j < s; j++)
+            {
+                int srcRow = x + i;
+                int srcCol = y + j;
+                
+                // Safety check
+                if (srcRow >= src.getNumberOfRows() || srcCol >= src.getNumberOfColumns()) continue;
+                
+                // Process RED channel
+                int rVal = src.getPixel(srcRow, srcCol, RED);
+                int rModified = (int)((float)rVal * moreC) + ac;
+                rModified = checkValue(rModified);
+                tgt.setPixel(srcRow, srcCol, rModified, RED);
+                
+                // Process GREEN channel
+                int gVal = src.getPixel(srcRow, srcCol, GREEN);
+                int gModified = (int)((float)gVal * moreC) + ac;
+                gModified = checkValue(gModified);
+                tgt.setPixel(srcRow, srcCol, gModified, GREEN);
+                
+                // Process BLUE channel
+                int bVal = src.getPixel(srcRow, srcCol, BLUE);
+                int bModified = (int)((float)bVal * moreC) + ac;
+                bModified = checkValue(bModified);
+                tgt.setPixel(srcRow, srcCol, bModified, BLUE);
+            }
+        }
+        return;
+    }
+    
+    // Handle 90/180/270 degree rotations
+    if (angle == 90 || angle == 180 || angle == 270)
+    {
+        for (int i = 0; i < s; i++)
+        {
+            for (int j = 0; j < s; j++)
+            {
+                // Calculate source position (backward mapping)
+                int srcI, srcJ;
+                if (angle == 90) {
+                    srcI = s - 1 - j;
+                    srcJ = i;
+                } else if (angle == 180) {
+                    srcI = s - 1 - i;
+                    srcJ = s - 1 - j;
+                } else { // 270
+                    srcI = j;
+                    srcJ = s - 1 - i;
+                }
+                
+                int srcRow = x + srcI;
+                int srcCol = y + srcJ;
+                int tgtRow = x + i;
+                int tgtCol = y + j;
+                
+                // Safety check
+                if (srcRow >= src.getNumberOfRows() || srcCol >= src.getNumberOfColumns()) continue;
+                if (tgtRow >= tgt.getNumberOfRows() || tgtCol >= tgt.getNumberOfColumns()) continue;
+                
+                // Process RED channel
+                int rVal = src.getPixel(srcRow, srcCol, RED);
+                int rModified = (int)((float)rVal * moreC) + ac;
+                rModified = checkValue(rModified);
+                tgt.setPixel(tgtRow, tgtCol, rModified, RED);
+                
+                // Process GREEN channel
+                int gVal = src.getPixel(srcRow, srcCol, GREEN);
+                int gModified = (int)((float)gVal * moreC) + ac;
+                gModified = checkValue(gModified);
+                tgt.setPixel(tgtRow, tgtCol, gModified, GREEN);
+                
+                // Process BLUE channel
+                int bVal = src.getPixel(srcRow, srcCol, BLUE);
+                int bModified = (int)((float)bVal * moreC) + ac;
+                bModified = checkValue(bModified);
+                tgt.setPixel(tgtRow, tgtCol, bModified, BLUE);
+            }
+        }
+        return;
+    }
+    
+    // Handle arbitrary angles
+    double angleRad = angle * PI / 180.0;
+    double cosA = cos(angleRad);
+    double sinA = sin(angleRad);
+    
+    double centerX = s / 2.0;
+    double centerY = s / 2.0;
+    
+    for (int i = 0; i < s; i++)
+    {
+        for (int j = 0; j < s; j++)
+        {
+            double relX = i - centerX;
+            double relY = j - centerY;
+            
+            double srcRelX = relX * cosA + relY * sinA;
+            double srcRelY = -relX * sinA + relY * cosA;
+            
+            int srcI = (int)round(srcRelX + centerX);
+            int srcJ = (int)round(srcRelY + centerY);
+            
+            int srcRow = x + srcI;
+            int srcCol = y + srcJ;
+            int tgtRow = x + i;
+            int tgtCol = y + j;
+            
+            // Check if source is within ROI bounds
+            if (srcI >= 0 && srcI < s && srcJ >= 0 && srcJ < s)
+            {
+                // Additional safety check for image bounds
+                if (srcRow >= src.getNumberOfRows() || srcCol >= src.getNumberOfColumns()) continue;
+                if (tgtRow >= tgt.getNumberOfRows() || tgtCol >= tgt.getNumberOfColumns()) continue;
+                
+                // Process RED channel
+                int rVal = src.getPixel(srcRow, srcCol, RED);
+                int rModified = (int)((float)rVal * moreC) + ac;
+                rModified = checkValue(rModified);
+                tgt.setPixel(tgtRow, tgtCol, rModified, RED);
+                
+                // Process GREEN channel
+                int gVal = src.getPixel(srcRow, srcCol, GREEN);
+                int gModified = (int)((float)gVal * moreC) + ac;
+                gModified = checkValue(gModified);
+                tgt.setPixel(tgtRow, tgtCol, gModified, GREEN);
+                
+                // Process BLUE channel
+                int bVal = src.getPixel(srcRow, srcCol, BLUE);
+                int bModified = (int)((float)bVal * moreC) + ac;
+                bModified = checkValue(bModified);
+                tgt.setPixel(tgtRow, tgtCol, bModified, BLUE);
+            }
+            else
+            {
+                // Fill with original pixel (no black pixels - Extra Credit)
+                if (tgtRow >= tgt.getNumberOfRows() || tgtCol >= tgt.getNumberOfColumns()) continue;
+                
+                tgt.setPixel(tgtRow, tgtCol, src.getPixel(tgtRow, tgtCol, RED), RED);
+                tgt.setPixel(tgtRow, tgtCol, src.getPixel(tgtRow, tgtCol, GREEN), GREEN);
+                tgt.setPixel(tgtRow, tgtCol, src.getPixel(tgtRow, tgtCol, BLUE), BLUE);
+            }
+        }
+    }
+}

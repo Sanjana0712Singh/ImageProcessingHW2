@@ -1,0 +1,605 @@
+#include "utility.h"
+#include <stdio.h>
+#include <string.h>
+
+#define MAXRGB 255
+#define MINRGB 0
+#define PI 3.14159265358979323846
+
+/*=======================================================================*
+ *                       GENERAL HELPERS                                  *
+ *=======================================================================*/
+
+std::string utility::intToString(int number)
+{
+    std::stringstream ss;
+    ss << number;
+    return ss.str();
+}
+
+/* Clamp an integer value to [0, 255]. */
+int utility::checkValue(int value)
+{
+    if (value > MAXRGB) return MAXRGB;
+    if (value < MINRGB) return MINRGB;
+    return value;
+}
+
+/*=======================================================================*
+ *                       HW0 GLOBAL FUNCTIONS                             *
+ *=======================================================================*/
+
+void utility::addGrey(image &src, image &tgt, int value)
+{
+    tgt.resize(src.getNumberOfRows(), src.getNumberOfColumns());
+    for (int i = 0; i < src.getNumberOfRows(); i++)
+        for (int j = 0; j < src.getNumberOfColumns(); j++)
+            tgt.setPixel(i, j, checkValue(src.getPixel(i, j) + value));
+}
+
+void utility::binarize(image &src, image &tgt, int threshold)
+{
+    tgt.resize(src.getNumberOfRows(), src.getNumberOfColumns());
+    for (int i = 0; i < src.getNumberOfRows(); i++)
+        for (int j = 0; j < src.getNumberOfColumns(); j++)
+            tgt.setPixel(i, j, (src.getPixel(i, j) < threshold) ? MINRGB : MAXRGB);
+}
+
+void utility::scale(image &src, image &tgt, float ratio)
+{
+    int rows = (int)((float)src.getNumberOfRows() * ratio);
+    int cols = (int)((float)src.getNumberOfColumns() * ratio);
+    tgt.resize(rows, cols);
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            int i2 = (int)floor((float)i / ratio);
+            int j2 = (int)floor((float)j / ratio);
+            if (ratio == 2)
+                tgt.setPixel(i, j, checkValue(src.getPixel(i2, j2)));
+            if (ratio == 0.5) {
+                int v = src.getPixel(i2,j2) + src.getPixel(i2,j2+1)
+                      + src.getPixel(i2+1,j2) + src.getPixel(i2+1,j2+1);
+                tgt.setPixel(i, j, checkValue(v / 4));
+            }
+        }
+    }
+}
+
+void utility::decreaseBrightness(image &src, image &tgt, int threshold, int value)
+{
+    tgt.resize(src.getNumberOfRows(), src.getNumberOfColumns());
+    for (int i = 0; i < src.getNumberOfRows(); i++)
+        for (int j = 0; j < src.getNumberOfColumns(); j++) {
+            int p = src.getPixel(i, j);
+            tgt.setPixel(i, j, (p < threshold) ? checkValue(p - value) : p);
+        }
+}
+
+/*=======================================================================*
+ *              HW1 ROI FUNCTIONS (now using roiRows, roiCols)            *
+ *=======================================================================*/
+
+/*----------- Add intensity in rectangular ROI -----------*/
+void utility::addGreyROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int value)
+{
+    for (int i = x; i < x + roiRows; i++)
+        for (int j = y; j < y + roiCols; j++)
+            tgt.setPixel(i, j, checkValue(src.getPixel(i, j) + value));
+}
+
+/*----------- Binarize in rectangular ROI -----------*/
+void utility::binarizeROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int threshold)
+{
+    for (int i = x; i < x + roiRows; i++)
+        for (int j = y; j < y + roiCols; j++)
+            tgt.setPixel(i, j, (src.getPixel(i, j) < threshold) ? MINRGB : MAXRGB);
+}
+
+/*----------- Decrease brightness in rectangular ROI -----------*/
+void utility::decreaseBrightnessROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int threshold, int value)
+{
+    for (int i = x; i < x + roiRows; i++)
+        for (int j = y; j < y + roiCols; j++) {
+            int p = src.getPixel(i, j);
+            tgt.setPixel(i, j, (p < threshold) ? checkValue(p - value) : p);
+        }
+}
+
+/*----------- Rotate ROI in-place (square ROIs only) -----------*/
+// Uses backward mapping: for each output pixel, compute the source pixel.
+// NOTE: Only valid when roiRows == roiCols; pass a square region.
+void utility::rotateROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int angle)
+{
+    int s = roiRows; // assume square
+    for (int i = 0; i < s; i++) {
+        for (int j = 0; j < s; j++) {
+            int srcI, srcJ;
+            if      (angle == 90)  { srcI = s - 1 - j; srcJ = i; }
+            else if (angle == 180) { srcI = s - 1 - i; srcJ = s - 1 - j; }
+            else if (angle == 270) { srcI = j;          srcJ = s - 1 - i; }
+            else                   { srcI = i;          srcJ = j; }
+            tgt.setPixel(x + i, y + j, src.getPixel(x + srcI, y + srcJ));
+        }
+    }
+}
+
+/*----------- Scale then rotate ROI in-place (square ROIs only) -----------*/
+void utility::scaleRotateROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, float ratio, int angle)
+{
+    int s = roiRows; // assume square
+    for (int i = 0; i < s; i++) {
+        for (int j = 0; j < s; j++) {
+            // Undo rotation
+            int i_rot, j_rot;
+            if      (angle == 90)  { i_rot = s - 1 - j; j_rot = i; }
+            else if (angle == 180) { i_rot = s - 1 - i; j_rot = s - 1 - j; }
+            else if (angle == 270) { i_rot = j;          j_rot = s - 1 - i; }
+            else                   { i_rot = i;          j_rot = j; }
+            // Undo scale
+            int i_src = (int)floor((float)i_rot / ratio);
+            int j_src = (int)floor((float)j_rot / ratio);
+            if (i_src < s && j_src < s)
+                tgt.setPixel(x + i, y + j, src.getPixel(x + i_src, y + j_src));
+        }
+    }
+}
+
+/*----------- Brightness then rotate ROI (square ROIs only) -----------*/
+void utility::brightnessRotateROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int br, int angle)
+{
+    int s = roiRows; // assume square
+    for (int i = 0; i < s; i++) {
+        for (int j = 0; j < s; j++) {
+            int modVal = checkValue(src.getPixel(x + i, y + j) + br);
+            if      (angle == 90)  tgt.setPixel(x + j,       y + (s-1-i), modVal);
+            else if (angle == 180) tgt.setPixel(x + (s-1-i), y + (s-1-j), modVal);
+            else if (angle == 270) tgt.setPixel(x + (s-1-j), y + i,       modVal);
+        }
+    }
+}
+
+/*----------- Color modify ROI (square ROIs only) -----------*/
+void utility::colorModifyROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, float moreC, int ac, int angle)
+{
+    int s = roiRows; // assume square
+    if (angle == 90 || angle == 180 || angle == 270 || angle == 0) {
+        for (int i = 0; i < s; i++) {
+            for (int j = 0; j < s; j++) {
+                int srcI, srcJ;
+                if      (angle == 90)  { srcI = s-1-j; srcJ = i; }
+                else if (angle == 180) { srcI = s-1-i; srcJ = s-1-j; }
+                else if (angle == 270) { srcI = j;     srcJ = s-1-i; }
+                else                   { srcI = i;     srcJ = j; }
+                for (int ch = 0; ch < 3; ch++) {
+                    int v = (int)((float)src.getPixel(x+srcI, y+srcJ, ch) * moreC) + ac;
+                    tgt.setPixel(x+i, y+j, ch, checkValue(v));
+                }
+            }
+        }
+    } else {
+        // Arbitrary angle: backward mapping around center
+        double rad = angle * PI / 180.0;
+        double cosA = cos(rad), sinA = sin(rad);
+        double cx = s / 2.0, cy = s / 2.0;
+        for (int i = 0; i < s; i++) {
+            for (int j = 0; j < s; j++) {
+                double rx = i - cx, ry = j - cy;
+                int srcI = (int)round(rx * cosA + ry * sinA + cx);
+                int srcJ = (int)round(-rx * sinA + ry * cosA + cy);
+                for (int ch = 0; ch < 3; ch++) {
+                    if (srcI >= 0 && srcI < s && srcJ >= 0 && srcJ < s) {
+                        int v = (int)((float)src.getPixel(x+srcI, y+srcJ, ch) * moreC) + ac;
+                        tgt.setPixel(x+i, y+j, ch, checkValue(v));
+                    } else {
+                        tgt.setPixel(x+i, y+j, ch, src.getPixel(x+i, y+j, ch));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/*=======================================================================*
+ *                     HW2 HELPER FUNCTIONS                               *
+ *=======================================================================*/
+
+/*-----------------------------------------------------------------------**/
+/* optimalThreshold: Iterative mean-splitting threshold within a ROI.     *
+ * Initialize T as the mean of all ROI pixels, then repeatedly split into *
+ * dark (< T) and bright (>= T) groups and set T = (mean_dark+mean_bright)/2.
+ * Converges when the change in T falls below 0.5 intensity levels.       */
+/*-----------------------------------------------------------------------**/
+double utility::optimalThreshold(image &src, int x, int y, int roiRows, int roiCols, int channel)
+{
+    // Initial T = mean intensity of all pixels in the ROI
+    double sum = 0.0;
+    int count = roiRows * roiCols;
+    for (int i = x; i < x + roiRows; i++)
+        for (int j = y; j < y + roiCols; j++)
+            sum += src.getPixel(i, j, channel);
+    double T = sum / count;
+
+    // Iterative refinement (up to 500 iterations for safety)
+    const double EPS = 0.5;
+    for (int iter = 0; iter < 500; iter++) {
+        double sumDark = 0.0, sumBright = 0.0;
+        int cntDark = 0, cntBright = 0;
+        for (int i = x; i < x + roiRows; i++) {
+            for (int j = y; j < y + roiCols; j++) {
+                double v = src.getPixel(i, j, channel);
+                if (v < T) { sumDark  += v; cntDark++;  }
+                else        { sumBright += v; cntBright++; }
+            }
+        }
+        // Edge case: one group empty → all pixels are on one side, cannot refine
+        if (cntDark == 0 || cntBright == 0) break;
+
+        double newT = 0.5 * (sumDark / cntDark + sumBright / cntBright);
+        if (fabs(newT - T) < EPS) { T = newT; break; }
+        T = newT;
+    }
+    return T;
+}
+
+/*-----------------------------------------------------------------------**/
+/* extractROI: Copy a rectangular region of src into a standalone image.  */
+/*-----------------------------------------------------------------------**/
+void utility::extractROI(image &src, image &roi, int x, int y, int roiRows, int roiCols)
+{
+    roi.resize(roiRows, roiCols);
+    for (int i = 0; i < roiRows; i++)
+        for (int j = 0; j < roiCols; j++)
+            for (int ch = 0; ch < 3; ch++)
+                roi.setPixel(i, j, ch, src.getPixel(x + i, y + j, ch));
+}
+
+/*-----------------------------------------------------------------------**/
+/* rotateImage: Rotate an entire image CW by 0/90/180/270 degrees.        *
+ * For 90° and 270°, output dimensions are transposed (new rows = old cols,*
+ * new cols = old rows). Uses backward mapping to avoid gaps.              */
+/*-----------------------------------------------------------------------**/
+void utility::rotateImage(image &src, image &tgt, int angle)
+{
+    int R = src.getNumberOfRows();
+    int C = src.getNumberOfColumns();
+
+    if (angle == 0) {
+        tgt.copyImage(src);
+    }
+    else if (angle == 90) {
+        // 90° CW: output is C×R. Backward mapping: tgt(i,j) = src(R-1-j, i)
+        tgt.resize(C, R);
+        for (int i = 0; i < C; i++)
+            for (int j = 0; j < R; j++)
+                for (int ch = 0; ch < 3; ch++)
+                    tgt.setPixel(i, j, ch, src.getPixel(R - 1 - j, i, ch));
+    }
+    else if (angle == 180) {
+        // 180°: same dims. Backward mapping: tgt(i,j) = src(R-1-i, C-1-j)
+        tgt.resize(R, C);
+        for (int i = 0; i < R; i++)
+            for (int j = 0; j < C; j++)
+                for (int ch = 0; ch < 3; ch++)
+                    tgt.setPixel(i, j, ch, src.getPixel(R - 1 - i, C - 1 - j, ch));
+    }
+    else if (angle == 270) {
+        // 270° CW: output is C×R. Backward mapping: tgt(i,j) = src(j, C-1-i)
+        tgt.resize(C, R);
+        for (int i = 0; i < C; i++)
+            for (int j = 0; j < R; j++)
+                for (int ch = 0; ch < 3; ch++)
+                    tgt.setPixel(i, j, ch, src.getPixel(j, C - 1 - i, ch));
+    }
+}
+
+/*=======================================================================*
+ *              HW2 1A — ALGORITHM A: GREY HISTOGRAM STRETCHING           *
+ *=======================================================================*/
+
+/*-----------------------------------------------------------------------**/
+/* algorithmA: Modified histogram stretching for a greyscale ROI.         *
+ *                                                                         *
+ * Step A1: Compute T via Optimal Thresholding within the ROI.            *
+ * Step A2: Among pixels I < T (dark pixels), find Imin and Imax.         *
+ *          Compute c = clamp(1.05*Imin, 0,255), d = clamp(0.95*Imax,0,255).
+ * Step A3: Piecewise mapping applied only to dark pixels:                 *
+ *          I <= c  → 0                                                   *
+ *          c < I < d → 255 * (I - c) / (d - c)   [linear]               *
+ *          I >= d  → 255                                                 *
+ * Pixels I >= T remain unchanged.                                         *
+ *                                                                         *
+ * Edge cases:                                                             *
+ *   - No dark pixels: logs a message and returns without modifying ROI.  *
+ *   - c == d (all dark pixels are same intensity): all map to 0.         *
+ *                                                                         *
+ * tgt must be pre-initialized as a copy of src before calling.           */
+/*-----------------------------------------------------------------------**/
+void utility::algorithmA(image &src, image &tgt, int x, int y, int roiRows, int roiCols)
+{
+    // --- Step A1: Compute optimal threshold T ---
+    double T = optimalThreshold(src, x, y, roiRows, roiCols, RED);
+
+    // --- Step A2: Find Imin, Imax of dark pixels (I < T) ---
+    int Imin = MAXRGB, Imax = MINRGB;
+    int darkCount = 0;
+    for (int i = x; i < x + roiRows; i++) {
+        for (int j = y; j < y + roiCols; j++) {
+            int val = src.getPixel(i, j, RED);
+            if ((double)val < T) {
+                if (val < Imin) Imin = val;
+                if (val > Imax) Imax = val;
+                darkCount++;
+            }
+        }
+    }
+
+    // Edge case: no dark pixels found in this ROI
+    if (darkCount == 0) {
+        printf("[AlgorithmA] No dark pixels (I < %.2f) in ROI (%d,%d,%d,%d). ROI left unchanged.\n",
+               T, x, y, roiRows, roiCols);
+        return;
+    }
+
+    // Compute c and d, clamped to [0, 255]
+    double c = (double)checkValue((int)(1.05 * Imin));
+    double d = (double)checkValue((int)(0.95 * Imax));
+
+    // Edge case: if c == d, the linear range is zero — all dark pixels map to 0
+    bool rangeValid = (d > c);
+    if (!rangeValid)
+        printf("[AlgorithmA] c == d (%.0f) in ROI (%d,%d,%d,%d); all dark pixels mapped to 0.\n",
+               c, x, y, roiRows, roiCols);
+
+    // --- Step A3: Apply piecewise mapping to dark pixels only ---
+    for (int i = x; i < x + roiRows; i++) {
+        for (int j = y; j < y + roiCols; j++) {
+            int val = src.getPixel(i, j, RED);
+            if ((double)val < T) {
+                int newVal;
+                if (!rangeValid || val <= (int)c) {
+                    newVal = 0;
+                } else if (val >= (int)d) {
+                    newVal = 255;
+                } else {
+                    // Linear: I' = 255 * (I - c) / (d - c)
+                    newVal = (int)(255.0 * ((double)val - c) / (d - c));
+                }
+                // setPixel(row, col, value) sets all 3 channels — correct for greyscale
+                tgt.setPixel(i, j, checkValue(newVal));
+            }
+            // Pixels >= T: already copied from src via tgt=src in iptool; no action needed
+        }
+    }
+}
+
+/*=======================================================================*
+ *              HW2 1B — ALGORITHM B: LOCAL QUARTER STRETCHING            *
+ *=======================================================================*/
+
+/*-----------------------------------------------------------------------**/
+/* algorithmB: Splits the ROI into 4 quarters and applies Algorithm A to  *
+ * each independently. Each quarter recomputes its own T, Imin, Imax, c, d.*
+ *                                                                         *
+ * Quarter layout (integer division; extra row/col → bottom/right):       *
+ *   Q1: rows [x,  x+halfR)  × cols [y,  y+halfC)   (top-left)           *
+ *   Q2: rows [x,  x+halfR)  × cols [y+halfC, y+roiCols) (top-right)     *
+ *   Q3: rows [x+halfR, x+roiRows) × cols [y, y+halfC)   (bottom-left)   *
+ *   Q4: rows [x+halfR, x+roiRows) × cols [y+halfC, y+roiCols) (bot-right)*
+ *                                                                         *
+ * tgt must be pre-initialized as a copy of src before calling.           */
+/*-----------------------------------------------------------------------**/
+void utility::algorithmB(image &src, image &tgt, int x, int y, int roiRows, int roiCols)
+{
+    int halfR = roiRows / 2;   // Floor division; bottom quarters absorb extra row
+    int halfC = roiCols / 2;   // Floor division; right quarters absorb extra col
+
+    // Q1: top-left
+    algorithmA(src, tgt, x,         y,         halfR,           halfC);
+    // Q2: top-right
+    algorithmA(src, tgt, x,         y + halfC, halfR,           roiCols - halfC);
+    // Q3: bottom-left
+    algorithmA(src, tgt, x + halfR, y,         roiRows - halfR, halfC);
+    // Q4: bottom-right
+    algorithmA(src, tgt, x + halfR, y + halfC, roiRows - halfR, roiCols - halfC);
+}
+
+/*=======================================================================*
+ *              HW2 1C — GREYSCALE AUGMENTATION (12 IMAGES)               *
+ *=======================================================================*/
+
+/*-----------------------------------------------------------------------**/
+/* greyAugmentation: Generates 12 images from a single greyscale ROI:     *
+ *   - Original ROI at 0°, 90°, 180°, 270°                               *
+ *   - Algorithm A processed ROI at 0°, 90°, 180°, 270°                  *
+ *   - Algorithm B processed ROI at 0°, 90°, 180°, 270°                  *
+ *                                                                         *
+ * Files are saved as: <outBase>_roi<roiIdx>_<NN>_<version>_r<angle>.<ext>*
+ * For 90°/270°, dimensions are transposed (roiCols × roiRows).           *
+ *                                                                         *
+ * Parameters:                                                             *
+ *   outBase   — filename stem (no extension), e.g. "output_aug"          *
+ *   ext       — file extension, e.g. "pgm"                               *
+ *   roiIdx    — index of this ROI in the loop (used for unique naming)   */
+/*-----------------------------------------------------------------------**/
+void utility::greyAugmentation(image &src, const char* outBase, const char* ext,
+                                 int x, int y, int roiRows, int roiCols, int roiIdx)
+{
+    // --- Step 1: Extract the ROI as a standalone image ---
+    image roi;
+    extractROI(src, roi, x, y, roiRows, roiCols);
+
+    // --- Step 2: Apply Algorithm A to produce roi_A ---
+    image roi_A;
+    roi_A.copyImage(roi);
+    algorithmA(roi, roi_A, 0, 0, roiRows, roiCols);
+
+    // --- Step 3: Apply Algorithm B to produce roi_B ---
+    image roi_B;
+    roi_B.copyImage(roi);
+    algorithmB(roi, roi_B, 0, 0, roiRows, roiCols);
+
+    // --- Step 4: Rotate each version by 0/90/180/270 and save ---
+    const char* vNames[3]  = {"orig", "A", "B"};
+    image*      vers[3]    = {&roi, &roi_A, &roi_B};
+    int         angles[4]  = {0, 90, 180, 270};
+    const char* aNames[4]  = {"0", "90", "180", "270"};
+
+    int imgNum = 0;
+    char fname[512];
+    for (int v = 0; v < 3; v++) {
+        for (int a = 0; a < 4; a++) {
+            image rotated;
+            rotateImage(*vers[v], rotated, angles[a]);
+            snprintf(fname, sizeof(fname), "%s_roi%d_%02d_%s_r%s.%s",
+                     outBase, roiIdx, imgNum, vNames[v], aNames[a], ext);
+            rotated.save(fname);
+            printf("[greyAugment] Saved image %02d: %s\n", imgNum, fname);
+            imgNum++;
+        }
+    }
+}
+
+/*=======================================================================*
+ *              HW2 3A — ALGORITHM A ON COLOR CHANNELS                    *
+ *=======================================================================*/
+
+/*-----------------------------------------------------------------------**/
+/* algorithmA_color: Applies Algorithm A to the specified color channel(s).*
+ *                                                                         *
+ * channelMask:                                                            *
+ *   0 = R only   (G and B channels are left unchanged)                   *
+ *   1 = G only   (R and B channels are left unchanged)                   *
+ *   2 = B only   (R and G channels are left unchanged)                   *
+ *   3 = ALL      (R, G, and B processed independently; each uses its     *
+ *                 own T, Imin, Imax, c, d computed within the ROI)       *
+ *                                                                         *
+ * tgt must be pre-initialized as a copy of src before calling.           */
+/*-----------------------------------------------------------------------**/
+void utility::algorithmA_color(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int channelMask)
+{
+    // Determine which channels are active
+    bool active[3];
+    active[RED]   = (channelMask == 0 || channelMask == 3);
+    active[GREEN] = (channelMask == 1 || channelMask == 3);
+    active[BLUE]  = (channelMask == 2 || channelMask == 3);
+
+    for (int ch = 0; ch < 3; ch++) {
+        if (!active[ch]) continue; // Skip inactive channels
+
+        // --- Step A1: Compute T for this channel ---
+        double T = optimalThreshold(src, x, y, roiRows, roiCols, ch);
+
+        // --- Step A2: Find Imin, Imax of dark pixels in this channel ---
+        int Imin = MAXRGB, Imax = MINRGB;
+        int darkCount = 0;
+        for (int i = x; i < x + roiRows; i++) {
+            for (int j = y; j < y + roiCols; j++) {
+                int val = src.getPixel(i, j, ch);
+                if ((double)val < T) {
+                    if (val < Imin) Imin = val;
+                    if (val > Imax) Imax = val;
+                    darkCount++;
+                }
+            }
+        }
+
+        // Edge case: no dark pixels for this channel
+        if (darkCount == 0) {
+            printf("[AlgorithmA_color] No dark pixels in channel %d of ROI (%d,%d,%d,%d). Channel unchanged.\n",
+                   ch, x, y, roiRows, roiCols);
+            continue;
+        }
+
+        double c = (double)checkValue((int)(1.05 * Imin));
+        double d = (double)checkValue((int)(0.95 * Imax));
+        bool rangeValid = (d > c);
+        if (!rangeValid)
+            printf("[AlgorithmA_color] c==d in channel %d of ROI (%d,%d,%d,%d); dark pixels mapped to 0.\n",
+                   ch, x, y, roiRows, roiCols);
+
+        // --- Step A3: Apply piecewise mapping to dark pixels of this channel only ---
+        for (int i = x; i < x + roiRows; i++) {
+            for (int j = y; j < y + roiCols; j++) {
+                int val = src.getPixel(i, j, ch);
+                if ((double)val < T) {
+                    int newVal;
+                    if (!rangeValid || val <= (int)c) {
+                        newVal = 0;
+                    } else if (val >= (int)d) {
+                        newVal = 255;
+                    } else {
+                        newVal = (int)(255.0 * ((double)val - c) / (d - c));
+                    }
+                    tgt.setPixel(i, j, ch, checkValue(newVal));
+                }
+                // Pixels >= T: already copied from src
+            }
+        }
+    }
+}
+
+/*=======================================================================*
+ *              HW2 3B — COLOR AUGMENTATION (20 IMAGES)                   *
+ *=======================================================================*/
+
+/*-----------------------------------------------------------------------**/
+/* colorAugmentation: Generates 20 images from a single color ROI:        *
+ *   - Original ROI              at 0°, 90°, 180°, 270°  (4 images)      *
+ *   - A applied to R channel    at 0°, 90°, 180°, 270°  (4 images)      *
+ *   - A applied to G channel    at 0°, 90°, 180°, 270°  (4 images)      *
+ *   - A applied to B channel    at 0°, 90°, 180°, 270°  (4 images)      *
+ *   - A applied to all channels at 0°, 90°, 180°, 270°  (4 images)      *
+ *                                                                         *
+ * Files saved as: <outBase>_roi<roiIdx>_<NN>_<version>_r<angle>.<ext>   *
+ *                                                                         *
+ * Parameters: same as greyAugmentation. Use ext="ppm" for color images.  */
+/*-----------------------------------------------------------------------**/
+void utility::colorAugmentation(image &src, const char* outBase, const char* ext,
+                                  int x, int y, int roiRows, int roiCols, int roiIdx)
+{
+    // --- Step 1: Extract the ROI as a standalone color image ---
+    image roi;
+    extractROI(src, roi, x, y, roiRows, roiCols);
+
+    // --- Step 2: Apply A to each channel variant ---
+
+    // A on R only (channelMask = 0)
+    image roi_R;
+    roi_R.copyImage(roi);
+    algorithmA_color(roi, roi_R, 0, 0, roiRows, roiCols, 0);
+
+    // A on G only (channelMask = 1)
+    image roi_G;
+    roi_G.copyImage(roi);
+    algorithmA_color(roi, roi_G, 0, 0, roiRows, roiCols, 1);
+
+    // A on B only (channelMask = 2)
+    image roi_B;
+    roi_B.copyImage(roi);
+    algorithmA_color(roi, roi_B, 0, 0, roiRows, roiCols, 2);
+
+    // A on ALL channels (channelMask = 3)
+    image roi_all;
+    roi_all.copyImage(roi);
+    algorithmA_color(roi, roi_all, 0, 0, roiRows, roiCols, 3);
+
+    // --- Step 3: Rotate each version 0/90/180/270 and save ---
+    const char* vNames[5] = {"orig", "A_R", "A_G", "A_B", "A_all"};
+    image*      vers[5]   = {&roi, &roi_R, &roi_G, &roi_B, &roi_all};
+    int         angles[4] = {0, 90, 180, 270};
+    const char* aNames[4] = {"0", "90", "180", "270"};
+
+    int imgNum = 0;
+    char fname[512];
+    for (int v = 0; v < 5; v++) {
+        for (int a = 0; a < 4; a++) {
+            image rotated;
+            rotateImage(*vers[v], rotated, angles[a]);
+            snprintf(fname, sizeof(fname), "%s_roi%d_%02d_%s_r%s.%s",
+                     outBase, roiIdx, imgNum, vNames[v], aNames[a], ext);
+            rotated.save(fname);
+            printf("[colorAugment] Saved image %02d: %s\n", imgNum, fname);
+            imgNum++;
+        }
+    }
+}

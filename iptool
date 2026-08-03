@@ -1,0 +1,76 @@
+#ifndef UTILITY_H
+#define UTILITY_H
+
+#include "../image/image.h"
+#include <sstream>
+#include <math.h>
+
+class utility
+{
+    public:
+        utility();
+        virtual ~utility();
+        static std::string intToString(int number);
+        static int checkValue(int value);
+
+        /*----------------- HW0 Global Functions -----------------*/
+        static void addGrey(image &src, image &tgt, int value);
+        static void binarize(image &src, image &tgt, int threshold);
+        static void scale(image &src, image &tgt, float ratio);
+        static void decreaseBrightness(image &src, image &tgt, int threshold, int value);
+
+        /*----------------- HW1 ROI Functions (updated to rectangular ROIs) -----------------*/
+        // All ROI functions now accept separate roiRows and roiCols instead of a single square 's'.
+        static void addGreyROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int value);
+        static void binarizeROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int threshold);
+        static void decreaseBrightnessROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int threshold, int value);
+
+        /*----------------- HW1 Augmentation Functions (updated to rectangular ROIs) -----------------*/
+        // NOTE: rotateROI and scaleRotateROI are designed for square ROIs (roiRows == roiCols).
+        // Passing a non-square ROI to these in-place rotation functions produces undefined results.
+        static void rotateROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int angle);
+        static void scaleRotateROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, float ratio, int angle);
+        static void brightnessRotateROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int br, int angle);
+        static void colorModifyROI(image &src, image &tgt, int x, int y, int roiRows, int roiCols, float moreC, int ac, int angle);
+
+        /*----------------- HW2 Helper Functions -----------------*/
+        // Compute optimal threshold T via iterative mean-splitting within a rectangular ROI.
+        // 'channel' defaults to RED (which equals GRAY for greyscale images).
+        static double optimalThreshold(image &src, int x, int y, int roiRows, int roiCols, int channel = RED);
+
+        // Extract a rectangular ROI from src into a fresh standalone image.
+        static void extractROI(image &src, image &roi, int x, int y, int roiRows, int roiCols);
+
+        // Rotate an entire image by 0/90/180/270 degrees CW.
+        // For 90° and 270°, the output dimensions are transposed (cols × rows).
+        static void rotateImage(image &src, image &tgt, int angle);
+
+        /*----------------- HW2 Greyscale Histogram Functions -----------------*/
+        // 1A: Modified histogram stretching (Algorithm A).
+        // Applies piecewise mapping only to dark pixels (I < T). Pixels >= T are unchanged.
+        // tgt must be pre-initialized as a copy of src before calling.
+        static void algorithmA(image &src, image &tgt, int x, int y, int roiRows, int roiCols);
+
+        // 1B: Local histogram stretching (Algorithm B).
+        // Splits the ROI into 4 quarters; applies Algorithm A to each independently.
+        // Extra row/col (odd dims) is assigned to the bottom/right quarter.
+        static void algorithmB(image &src, image &tgt, int x, int y, int roiRows, int roiCols);
+
+        // 1C: Greyscale augmentation — saves 12 images (orig + A + B, each rotated 0/90/180/270).
+        // outBase is the filename without extension. ext is "pgm" or "ppm". roiIdx used for naming.
+        static void greyAugmentation(image &src, const char* outBase, const char* ext,
+                                      int x, int y, int roiRows, int roiCols, int roiIdx);
+
+        /*----------------- HW2 Color Histogram Functions -----------------*/
+        // 3A: Algorithm A applied to one or more color channels.
+        // channelMask: 0=R only, 1=G only, 2=B only, 3=ALL (R, G, and B independently).
+        // Each active channel recomputes its own T, Imin, Imax, c, d from the ROI.
+        static void algorithmA_color(image &src, image &tgt, int x, int y, int roiRows, int roiCols, int channelMask);
+
+        // 3B: Color augmentation — saves 20 images.
+        // Generates orig + A_R + A_G + A_B + A_all, each rotated 0/90/180/270.
+        static void colorAugmentation(image &src, const char* outBase, const char* ext,
+                                       int x, int y, int roiRows, int roiCols, int roiIdx);
+};
+
+#endif
